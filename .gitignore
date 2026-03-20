@@ -1,0 +1,14 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.env
+venv/
+env/
+
+# Firebase private key - NEVER commit this!
+firebase_key.json
+
+# IDE
+.vscode/
+.idea/
