@@ -1,16 +1,16 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
 from typing import Optional, List
-from firebase_admin import firestore
+from database import get_db
+from models import User
 
 router = APIRouter()
-db = firestore.client()
 
-
-# ─── Request Models ───────────────────────────────────────────────────────────
+# ─── Request Models ───────────────────────────────────────────────────────
 
 class PatientProfileUpdate(BaseModel):
-    uid: str
+    uid: str  # Note: uid matches id in our schema for this project
     age: Optional[str] = None
     bloodType: Optional[str] = None
     height: Optional[str] = None
@@ -21,32 +21,41 @@ class PatientProfileUpdate(BaseModel):
     medications: Optional[List[str]] = None
 
 
-# ─── Endpoints ────────────────────────────────────────────────────────────────
+# ─── Endpoints ───────────────────────────────────────────────────────────
 
 @router.get("/profile/{uid}")
-async def get_profile(uid: str):
-    """Get user profile by Firebase UID"""
-    doc = db.collection("users").document(uid).get()
-    if not doc.exists:
+async def get_profile(uid: str, db: Session = Depends(get_db)):
+    # Try ID first (most common), then original UID
+    user = db.query(User).filter(User.id == int(uid) if uid.isdigit() else False).first()
+    if not user:
+        user = db.query(User).filter(User.uid == uid).first()
+        
+    if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    return doc.to_dict()
+    return user.to_dict()
 
 
 @router.put("/patient-profile")
-async def update_patient_profile(data: PatientProfileUpdate):
-    """Update patient medical profile fields"""
-    try:
-        update_data = data.dict(exclude={"uid"}, exclude_none=True)
-        db.collection("users").document(data.uid).update(update_data)
-        return {"success": True, "message": "Profile updated successfully"}
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
-
-@router.get("/role/{uid}")
-async def get_user_role(uid: str):
-    """Get the role of a user by UID"""
-    doc = db.collection("users").document(uid).get()
-    if not doc.exists:
+async def update_patient_profile(data: PatientProfileUpdate, db: Session = Depends(get_db)):
+    # Lookup user
+    user = db.query(User).filter(User.id == int(data.uid) if data.uid.isdigit() else False).first()
+    if not user:
+        user = db.query(User).filter(User.uid == data.uid).first()
+        
+    if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    return {"role": doc.to_dict().get("role")}
+    
+    # Update fields
+    if data.age: user.age = data.age
+    if data.bloodType: user.blood_type = data.bloodType
+    if data.height: user.height = data.height
+    if data.weight: user.weight = data.weight
+    if data.dateOfBirth: user.dob = data.dateOfBirth
+    if data.socialStatus: user.social_status = data.socialStatus
+    if data.chronicConditions is not None: user.chronic_conditions = data.chronicConditions
+    if data.medications is not None: user.medications = data.medications
+    
+    db.commit()
+    db.refresh(user)
+    
+    return {"success": True, "message": "Profile updated", "user": user.to_dict()}

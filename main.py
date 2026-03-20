@@ -1,9 +1,13 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from routers import auth, users
-import os
+from database import engine
+import models
 
-app = FastAPI(title="Graduation Project API", version="1.0.0")
+# Create database tables on startup
+models.Base.metadata.create_all(bind=engine)
+
+app = FastAPI(title="Graduation Project API (PostgreSQL)")
 
 app.add_middleware(
     CORSMiddleware,
@@ -18,7 +22,7 @@ app.include_router(users.router, prefix="/users", tags=["Users"])
 
 @app.get("/")
 def root():
-    return {"status": "✅ Graduation Project API is running!", "version": "1.0.0"}
+    return {"status": "✅ PostgreSQL API is running!", "database": "Connected"}
 
 @app.get("/health")
 def health():
