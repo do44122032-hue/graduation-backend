@@ -3,7 +3,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from typing import Optional, List
 from database import get_db
-from models import User
+from models import User, DoctorSchedule
 
 router = APIRouter()
 
@@ -20,6 +20,11 @@ class PatientProfileUpdate(BaseModel):
     chronicConditions: Optional[List[str]] = None
     medications: Optional[List[str]] = None
 
+class ScheduleCreate(BaseModel):
+    day: str
+    startTime: str
+    endTime: str
+
 
 # ─── Endpoints ───────────────────────────────────────────────────────────
 
@@ -33,6 +38,61 @@ async def get_profile(uid: str, db: Session = Depends(get_db)):
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     return user.to_dict()
+
+
+@router.get("/patients")
+async def get_patients(db: Session = Depends(get_db)):
+    """Fetch all users with the role 'patient'"""
+    patients = db.query(User).filter(User.role == "patient").all()
+    return [patient.to_dict() for patient in patients]
+
+
+@router.get("/doctors")
+async def get_doctors(db: Session = Depends(get_db)):
+    """Fetch all users with the role 'doctor'"""
+    doctors = db.query(User).filter(User.role == "doctor").all()
+    return [doctor.to_dict() for doctor in doctors]
+
+
+@router.get("/doctors/active")
+async def get_active_doctors(db: Session = Depends(get_db)):
+    """Fetch all ACTIVE users with the role 'doctor'"""
+    doctors = db.query(User).filter(User.role == "doctor", User.is_active == True).all()
+    return [doctor.to_dict() for doctor in doctors]
+
+
+@router.get("/doctors/{uid}/schedule")
+async def get_doctor_schedule(uid: str, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.id == int(uid) if uid.isdigit() else False).first()
+    if not user:
+        user = db.query(User).filter(User.uid == uid).first()
+    if not user or user.role != "doctor":
+        raise HTTPException(status_code=404, detail="Doctor not found")
+        
+    schedules = db.query(DoctorSchedule).filter(DoctorSchedule.doctor_id == user.id).all()
+    return [s.to_dict() for s in schedules]
+
+
+@router.post("/doctors/{uid}/schedule")
+async def add_doctor_schedule(uid: str, data: ScheduleCreate, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.id == int(uid) if uid.isdigit() else False).first()
+    if not user:
+        user = db.query(User).filter(User.uid == uid).first()
+    if not user or user.role != "doctor":
+        raise HTTPException(status_code=404, detail="Doctor not found")
+        
+    new_slot = DoctorSchedule(
+        doctor_id=user.id,
+        day=data.day,
+        start_time=data.startTime,
+        end_time=data.endTime,
+        is_booked=False
+    )
+    db.add(new_slot)
+    db.commit()
+    db.refresh(new_slot)
+    
+    return {"success": True, "schedule": new_slot.to_dict()}
 
 
 @router.put("/patient-profile")

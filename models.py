@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Integer, ARRAY, Text, ForeignKey, JSON
+from sqlalchemy import Column, String, Integer, ARRAY, Text, ForeignKey, JSON, Boolean
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 
@@ -15,6 +15,9 @@ class User(Base):
     phone = Column(String)
     role = Column(String, nullable=False)  # "student", "doctor", "patient"
     profile_picture = Column(String)
+    department = Column(String, nullable=True)
+    bio = Column(Text, nullable=True)
+    is_active = Column(Boolean, default=False)
 
     # Medical Profile (flattened for simplicity, or could be a JSON column)
     age = Column(String)
@@ -42,6 +45,29 @@ class User(Base):
             "socialStatus": self.social_status,
             "chronicConditions": self.chronic_conditions or [],
             "medications": self.medications or [],
+            "department": self.department,
+            "bio": self.bio,
+            "isActive": self.is_active,
+        }
+
+class DoctorSchedule(Base):
+    __tablename__ = "doctor_schedules"
+
+    id = Column(Integer, primary_key=True, index=True)
+    doctor_id = Column(Integer, ForeignKey("users.id"))
+    day = Column(String) # e.g., 'Monday'
+    start_time = Column(String) # e.g., '09:00 AM'
+    end_time = Column(String) # e.g., '10:00 AM'
+    is_booked = Column(Boolean, default=False)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "doctorId": self.doctor_id,
+            "day": self.day,
+            "startTime": self.start_time,
+            "endTime": self.end_time,
+            "isBooked": self.is_booked,
         }
 
 class Appointment(Base):

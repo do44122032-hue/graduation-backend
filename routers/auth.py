@@ -31,6 +31,14 @@ class SignupRequest(BaseModel):
     password: str
     phone: str
     role: str
+    department: str | None = None
+    bio: str | None = None
+
+class ResetPasswordRequest(BaseModel):
+    email: str
+
+class LogoutRequest(BaseModel):
+    uid: str
 
 class ResetPasswordRequest(BaseModel):
     email: str
@@ -53,6 +61,9 @@ async def signup(data: SignupRequest, db: Session = Depends(get_db)):
         password_hash=get_password_hash(data.password),
         phone=data.phone,
         role=data.role,
+        department=data.department,
+        bio=data.bio,
+        is_active=False,
         chronic_conditions=[],
         medications=[]
     )
@@ -77,6 +88,11 @@ async def login(data: LoginRequest, db: Session = Depends(get_db)):
     if db_user.role != data.role:
         raise HTTPException(status_code=403, detail="Unauthorized role")
         
+    if db_user.role == "doctor":
+        db_user.is_active = True
+        db.commit()
+        db.refresh(db_user)
+        
     return {"success": True, "user": db_user.to_dict()}
 
 
@@ -87,3 +103,15 @@ async def reset_password(data: ResetPasswordRequest, db: Session = Depends(get_d
     if db_user:
         return {"success": True, "message": "Reset instructions sent (Mock)"}
     return {"success": True}  # Security: don't leak user presence
+
+@router.post("/logout")
+async def logout(data: LogoutRequest, db: Session = Depends(get_db)):
+    db_user = db.query(User).filter(User.id == int(data.uid) if data.uid.isdigit() else False).first()
+    if not db_user:
+        db_user = db.query(User).filter(User.uid == data.uid).first()
+        
+    if db_user and db_user.role == "doctor":
+        db_user.is_active = False
+        db.commit()
+        
+    return {"success": True}
