@@ -133,3 +133,48 @@ async def log_lab_result(data: LabResultCreate, db: Session = Depends(get_db)):
     db.refresh(new_lab_result)
     
     return {"success": True, "message": "Lab result saved successfully", "labResult": new_lab_result.to_dict()}
+
+class AppointmentCreate(BaseModel):
+    uid: str
+    doctorName: str
+    specialty: str
+    date: str
+    time: str
+    type: str
+
+@router.post("/appointments/book")
+async def book_appointment(data: AppointmentCreate, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.id == int(data.uid) if data.uid.isdigit() else False).first()
+    if not user:
+        user = db.query(User).filter(User.uid == data.uid).first()
+        
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    new_appointment = Appointment(
+        patient_id=user.id,
+        doctor_name=data.doctorName,
+        specialty=data.specialty,
+        date=data.date,
+        time=data.time,
+        type=data.type,
+        status="pending"
+    )
+    
+    db.add(new_appointment)
+    db.commit()
+    db.refresh(new_appointment)
+    
+    return {"success": True, "message": "Appointment booked successfully", "appointment": new_appointment.to_dict()}
+
+@router.post("/appointments/cancel/{appt_id}")
+async def cancel_appointment(appt_id: int, db: Session = Depends(get_db)):
+    appointment = db.query(Appointment).filter(Appointment.id == appt_id).first()
+    if not appointment:
+        raise HTTPException(status_code=404, detail="Appointment not found")
+        
+    appointment.status = "cancelled"
+    db.commit()
+    db.refresh(appointment)
+    
+    return {"success": True, "message": "Appointment cancelled successfully", "appointment": appointment.to_dict()}
