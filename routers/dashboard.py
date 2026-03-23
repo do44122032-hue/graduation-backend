@@ -3,7 +3,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from database import get_db
-from models import User, Appointment, VitalSign, MedicationRecord
+from models import User, Appointment, VitalSign, MedicationRecord, LabResult
 
 router = APIRouter()
 
@@ -37,6 +37,8 @@ async def get_patient_dashboard(uid: str, db: Session = Depends(get_db)):
     vitals = db.query(VitalSign).filter(VitalSign.patient_id == user.id).order_by(VitalSign.id.desc()).all()
          
     medications = db.query(MedicationRecord).filter(MedicationRecord.patient_id == user.id).all()
+    
+    lab_results = db.query(LabResult).filter(LabResult.patient_id == user.id).order_by(LabResult.id.desc()).all()
 
     # Health Alert Logic (Simple example)
     health_alerts = []
@@ -54,6 +56,7 @@ async def get_patient_dashboard(uid: str, db: Session = Depends(get_db)):
         "upcomingAppointments": [a.to_dict() for a in appointments],
         "recentVitals": [v.to_dict() for v in vitals],
         "activeMedications": [m.to_dict() for m in medications],
+        "labResults": [l.to_dict() for l in lab_results],
         "healthAlerts": health_alerts
     }
 
@@ -100,3 +103,33 @@ async def log_vitals(data: VitalSignCreate, db: Session = Depends(get_db)):
     db.refresh(new_vital)
     
     return {"success": True, "message": "Vitals logged successfully", "vital": new_vital.to_dict()}
+
+class LabResultCreate(BaseModel):
+    uid: str
+    date: str
+    image: Optional[str] = None
+    extractedData: Optional[dict] = None
+    glucose: Optional[int] = None
+
+@router.post("/lab-results")
+async def log_lab_result(data: LabResultCreate, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.id == int(data.uid) if data.uid.isdigit() else False).first()
+    if not user:
+        user = db.query(User).filter(User.uid == data.uid).first()
+        
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    new_lab_result = LabResult(
+        patient_id=user.id,
+        date=data.date,
+        image_url=data.image,
+        extracted_data=data.extractedData,
+        glucose_level=data.glucose
+    )
+    
+    db.add(new_lab_result)
+    db.commit()
+    db.refresh(new_lab_result)
+    
+    return {"success": True, "message": "Lab result saved successfully", "labResult": new_lab_result.to_dict()}

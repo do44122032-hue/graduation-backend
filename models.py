@@ -127,3 +127,22 @@ class MedicationRecord(Base):
             "reasonForMedication": self.reason_for_medication,
             "specialInstructions": self.special_instructions,
         }
+
+class LabResult(Base):
+    __tablename__ = "lab_results"
+
+    id = Column(Integer, primary_key=True, index=True)
+    patient_id = Column(Integer, ForeignKey("users.id"))
+    date = Column(String)
+    image_url = Column(String)
+    extracted_data = Column(JSON)
+    glucose_level = Column(Integer, nullable=True)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "date": self.date,
+            "image": self.image_url,
+            "extractedData": self.extracted_data,
+            "glucose": self.glucose_level
+        }
