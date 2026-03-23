@@ -5,9 +5,12 @@ from fastapi.staticfiles import StaticFiles
 import os
 from database import engine
 import models
+from migrate_db import migrate
 
 # Create database tables on startup
 models.Base.metadata.create_all(bind=engine)
+# Run migrations for existing tables
+migrate()
 
 app = FastAPI(title="Graduation Project API (PostgreSQL)")
 
