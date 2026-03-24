@@ -21,14 +21,18 @@ async def upload_lab_result(
     file: UploadFile = File(...),
     db: Session = Depends(get_db)
 ):
+    print(f"DEBUG: Lab upload request for user {uid}")
     # 1. Verify User
-    user = db.query(User).filter(User.uid == uid).first()
-    if not user:
-        # Try numeric ID if UID not found
-        user = db.query(User).filter(User.id == int(uid) if uid.isdigit() else False).first()
+    user = None
+    if uid.isdigit():
+        user = db.query(User).filter(User.id == int(uid)).first()
     
     if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+        user = db.query(User).filter(User.uid == uid).first()
+    
+    if not user:
+        print(f"DEBUG: User {uid} not found in database")
+        raise HTTPException(status_code=404, detail=f"User with ID/UID '{uid}' not found")
 
     # 2. Save File
     file_path = os.path.join(UPLOAD_DIR, f"{user.id}_{datetime.now().timestamp()}_{file.filename}")
@@ -56,16 +60,21 @@ async def upload_lab_result(
         glucose_val = None
 
     # 4. Save to Database
-    new_result = LabResult(
-        patient_id=user.id,
-        date=datetime.now().strftime("%Y-%m-%d"),
-        image_url=f"/static/lab_reports/{os.path.basename(file_path)}", # In production, use S3/Cloudinary URL
-        extracted_data={"raw_text": text},
-        glucose_level=glucose_val
-    )
-    
-    db.add(new_result)
-    db.commit()
-    db.refresh(new_result)
+    try:
+        new_result = LabResult(
+            patient_id=user.id,
+            date=datetime.now().strftime("%Y-%m-%d"),
+            image_url=f"/static/lab_reports/{os.path.basename(file_path)}", # In production, use S3/Cloudinary URL
+            extracted_data={"raw_text": text},
+            glucose_level=glucose_val
+        )
+        
+        db.add(new_result)
+        db.commit()
+        db.refresh(new_result)
+    except Exception as e:
+        print(f"DATABASE ERROR: {e}")
+        # Try to re-create tables if it's a "table doesn't exist" error
+        raise HTTPException(status_code=500, detail=f"Database error while saving result. Ensure tables exist. Error: {str(e)}")
 
     return {"success": True, "data": new_result.to_dict()}

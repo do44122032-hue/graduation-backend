@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from routers import auth, users, dashboard, lab
+from routers import auth, users, dashboard, lab, chat
 from fastapi.staticfiles import StaticFiles
 import os
 from database import engine
@@ -26,6 +26,7 @@ app.include_router(auth.router, prefix="/auth", tags=["Auth"])
 app.include_router(users.router, prefix="/users", tags=["Users"])
 app.include_router(dashboard.router, prefix="/dashboard", tags=["Dashboard"])
 app.include_router(lab.router, prefix="/lab", tags=["Lab"])
+app.include_router(chat.router, prefix="/chat", tags=["Chat"])
 
 # Mount static files to serve uploaded lab reports
 os.makedirs("static/lab_reports", exist_ok=True)

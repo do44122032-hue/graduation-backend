@@ -1,6 +1,7 @@
 from sqlalchemy import Column, String, Integer, ARRAY, Text, ForeignKey, JSON, Boolean
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
+from datetime import datetime
 
 Base = declarative_base()
 
@@ -171,4 +172,26 @@ class LabResult(Base):
             "image": self.image_url,
             "extractedData": self.extracted_data,
             "glucose": self.glucose_level
+        }
+
+class Message(Base):
+    __tablename__ = "messages"
+
+    id = Column(Integer, primary_key=True, index=True)
+    sender_id = Column(Integer, ForeignKey("users.id"))
+    receiver_id = Column(Integer, ForeignKey("users.id"))
+    content = Column(Text, nullable=False)
+    timestamp = Column(String, default=lambda: datetime.now().isoformat())
+    type = Column(String, default="text") # text, lab_result, medication, appointment
+    data = Column(JSON, nullable=True) # For non-text message details
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "senderId": self.sender_id,
+            "receiverId": self.receiver_id,
+            "content": self.content,
+            "timestamp": self.timestamp,
+            "type": self.type,
+            "data": self.data or {}
         }
