@@ -78,3 +78,36 @@ async def upload_lab_result(
         raise HTTPException(status_code=500, detail=f"Database error while saving result. Ensure tables exist. Error: {str(e)}")
 
     return {"success": True, "data": new_result.to_dict()}
+
+@router.get("/{uid}")
+async def get_lab_results(
+    uid: str,
+    db: Session = Depends(get_db)
+):
+    # 1. Verify User
+    user = None
+    if uid.isdigit():
+        user = db.query(User).filter(User.id == int(uid)).first()
+    
+    if not user:
+        user = db.query(User).filter(User.uid == uid).first()
+    
+    if not user:
+        raise HTTPException(status_code=404, detail=f"User with ID/UID '{uid}' not found")
+
+    results = db.query(LabResult).filter(LabResult.patient_id == user.id).order_by(LabResult.id.desc()).all()
+    if not results:
+        # Debug: Return a mock result to see if UI shows it
+        return [{
+            "id": 0,
+            "date": "2024-03-24",
+            "image": "https://images.unsplash.com/photo-1620933967796-53cc2b175b6c",
+            "extractedData": {"raw_text": "MOCK DATA FOR DEBUGGING"},
+            "glucose": 95
+        }]
+    return [r.to_dict() for r in results]
+
+@router.get("/test/all")
+async def get_all_lab_results(db: Session = Depends(get_db)):
+    results = db.query(LabResult).all()
+    return [r.to_dict() for r in results]
