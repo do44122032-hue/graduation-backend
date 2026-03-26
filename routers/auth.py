@@ -40,8 +40,6 @@ class ResetPasswordRequest(BaseModel):
 class LogoutRequest(BaseModel):
     uid: str
 
-class ResetPasswordRequest(BaseModel):
-    email: str
 
 
 # ─── Endpoints ───────────────────────────────────────────────────────────

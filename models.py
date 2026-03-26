@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Integer, ARRAY, Text, ForeignKey, JSON, Boolean
+from sqlalchemy import Column, String, Integer, ARRAY, Text, ForeignKey, JSON, Boolean, Float
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 from datetime import datetime
@@ -76,6 +76,8 @@ class Appointment(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     patient_id = Column(Integer, ForeignKey("users.id"))
+    patient_name = Column(String, nullable=True) # Cached name for easy display
+    doctor_id = Column(Integer, ForeignKey("users.id"), nullable=True) # Linked to doctor user
     doctor_name = Column(String) # Simple for now, can be linked to doctor user id later
     specialty = Column(String)
     date = Column(String)
@@ -86,6 +88,9 @@ class Appointment(Base):
     def to_dict(self):
         return {
             "id": str(self.id),
+            "patientId": self.patient_id,
+            "patientName": self.patient_name,
+            "doctorId": self.doctor_id,
             "doctorName": self.doctor_name,
             "specialty": self.specialty,
             "date": self.date,
@@ -107,7 +112,7 @@ class VitalSign(Base):
     respiratory_rate = Column(Integer)
     oxygen_saturation = Column(Integer)
     weight = Column(Integer)
-    bmi = Column(Integer) # or Float
+    bmi = Column(Float) # or Float
     blood_glucose = Column(Integer)
 
     def to_dict(self):
@@ -194,4 +199,28 @@ class Message(Base):
             "timestamp": self.timestamp,
             "type": self.type,
             "data": self.data or {}
+        }
+
+class StudentReport(Base):
+    __tablename__ = "student_reports"
+
+    id = Column(Integer, primary_key=True, index=True)
+    student_id = Column(Integer, ForeignKey("users.id"))
+    doctor_id = Column(Integer, ForeignKey("users.id"))
+    title = Column(String)
+    description = Column(String)
+    file_url = Column(String, nullable=True)
+    status = Column(String, default="submitted")
+    submitted_at = Column(String, default=lambda: datetime.now().isoformat())
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "studentId": self.student_id,
+            "doctorId": self.doctor_id,
+            "title": self.title,
+            "description": self.description,
+            "fileUrl": self.file_url,
+            "status": self.status,
+            "submittedAt": self.submitted_at
         }

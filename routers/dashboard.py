@@ -3,7 +3,8 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from database import get_db
-from models import User, Appointment, VitalSign, MedicationRecord, LabResult
+from models import User, Appointment, VitalSign, MedicationRecord, LabResult, DoctorSchedule
+from datetime import datetime
 
 router = APIRouter()
 
@@ -24,15 +25,7 @@ async def get_patient_dashboard(uid: str, db: Session = Depends(get_db)):
     # if the tables are empty, or actual data if it exists.
     
     appointments = db.query(Appointment).filter(Appointment.patient_id == user.id).all()
-    # If no appointments in DB, provide some mock ones for the UI to be interactive initially
-    if not appointments:
-        mock_apt1 = Appointment(patient_id=user.id, doctor_name="Dr. Michael Chen", specialty="Cardiologist", date="Jan 12, 2026", time="10:30 AM", type="Video Consultation", status="confirmed")
-        mock_apt2 = Appointment(patient_id=user.id, doctor_name="Dr. Sarah Wilson", specialty="Dermatologist", date="Jan 15, 2026", time="02:00 PM", type="In-Person Visit", status="confirmed")
-        db.add_all([mock_apt1, mock_apt2])
-        db.commit()
-        db.refresh(mock_apt1)
-        db.refresh(mock_apt2)
-        appointments = [mock_apt1, mock_apt2]
+    # No more mock appointments
 
     vitals = db.query(VitalSign).filter(VitalSign.patient_id == user.id).order_by(VitalSign.id.desc()).all()
          
@@ -136,6 +129,8 @@ async def log_lab_result(data: LabResultCreate, db: Session = Depends(get_db)):
 
 class AppointmentCreate(BaseModel):
     uid: str
+    patientName: Optional[str] = None
+    doctorId: Optional[str] = None
     doctorName: str
     specialty: str
     date: str
@@ -150,9 +145,15 @@ async def book_appointment(data: AppointmentCreate, db: Session = Depends(get_db
         
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+        
+    doctor_id_val = None
+    if data.doctorId and data.doctorId.isdigit():
+        doctor_id_val = int(data.doctorId)
 
     new_appointment = Appointment(
         patient_id=user.id,
+        patient_name=data.patientName,
+        doctor_id=doctor_id_val,
         doctor_name=data.doctorName,
         specialty=data.specialty,
         date=data.date,
@@ -162,10 +163,44 @@ async def book_appointment(data: AppointmentCreate, db: Session = Depends(get_db
     )
     
     db.add(new_appointment)
+    
+    # --- Sync with Doctor Schedule ---
+    if doctor_id_val:
+        try:
+            # Convert YYYY-MM-DD to day name (e.g. 'Monday')
+            day_name = datetime.strptime(data.date, "%Y-%m-%d").strftime("%A")
+            
+            # Find matching slot
+            slot = db.query(DoctorSchedule).filter(
+                DoctorSchedule.doctor_id == doctor_id_val,
+                DoctorSchedule.day == day_name,
+                DoctorSchedule.start_time == data.time
+            ).first()
+            
+            if slot:
+                slot.is_booked = True
+        except Exception as e:
+            print(f"Error syncing schedule on book: {e}")
+            
     db.commit()
     db.refresh(new_appointment)
     
     return {"success": True, "message": "Appointment booked successfully", "appointment": new_appointment.to_dict()}
+
+@router.get("/doctor/{uid}/appointments")
+async def get_doctor_appointments(uid: str, db: Session = Depends(get_db)):
+    # Lookup doctor
+    doctor = db.query(User).filter(User.id == int(uid) if uid.isdigit() else False).first()
+    if not doctor:
+        doctor = db.query(User).filter(User.uid == uid).first()
+        
+    if not doctor or doctor.role != "doctor":
+        raise HTTPException(status_code=404, detail="Doctor not found")
+        
+    appointments = db.query(Appointment).filter(Appointment.doctor_id == doctor.id).all()
+    
+    # Also include patient info if needed, but for now just to_dict
+    return [a.to_dict() for a in appointments]
 
 @router.post("/appointments/cancel/{appt_id}")
 async def cancel_appointment(appt_id: int, db: Session = Depends(get_db)):
@@ -174,7 +209,34 @@ async def cancel_appointment(appt_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Appointment not found")
         
     appointment.status = "cancelled"
+    
+    # --- Sync with Doctor Schedule ---
+    if appointment.doctor_id:
+        try:
+            day_name = datetime.strptime(appointment.date, "%Y-%m-%d").strftime("%A")
+            slot = db.query(DoctorSchedule).filter(
+                DoctorSchedule.doctor_id == appointment.doctor_id,
+                DoctorSchedule.day == day_name,
+                DoctorSchedule.start_time == appointment.time
+            ).first()
+            
+            if slot:
+                slot.is_booked = False
+        except Exception as e:
+            print(f"Error syncing schedule on cancel: {e}")
+
     db.commit()
     db.refresh(appointment)
     
     return {"success": True, "message": "Appointment cancelled successfully", "appointment": appointment.to_dict()}
+
+@router.post("/appointments/confirm/{appt_id}")
+async def confirm_appointment(appt_id: int, db: Session = Depends(get_db)):
+    appointment = db.query(Appointment).filter(Appointment.id == appt_id).first()
+    if not appointment:
+        raise HTTPException(status_code=404, detail="Appointment not found")
+    
+    appointment.status = "confirmed"
+    db.commit()
+    db.refresh(appointment)
+    return {"success": True, "message": "Appointment confirmed successfully", "appointment": appointment.to_dict()}
