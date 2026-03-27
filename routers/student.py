@@ -1,8 +1,9 @@
 from fastapi import APIRouter, HTTPException, Depends, File, UploadFile, Form
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
-from typing import Optional
+from typing import Optional, List
 from database import get_db
-from models import User, StudentReport
+from models import User, StudentReport, StudentTask
 import shutil
 import os
 from datetime import datetime
@@ -11,6 +12,14 @@ router = APIRouter()
 
 UPLOAD_DIR = "static/student_reports"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+class TaskCreate(BaseModel):
+    student_id: Optional[int] = None
+    title: str
+    description: Optional[str] = ""
+    due_date: Optional[str] = ""
+    color_hex: Optional[str] = "E8C998"
+
 
 @router.post("/upload-report")
 async def upload_student_report(
@@ -112,4 +121,73 @@ async def get_doctor_reports(
             report_data['studentName'] = st.name
         result.append(report_data)
 
-    return result
+
+# ─── Tasks ───────────────────────────────────────────────────────────
+
+@router.get("/tasks/{uid}")
+async def get_student_tasks(
+    uid: str,
+    db: Session = Depends(get_db)
+):
+    student = None
+    if uid.isdigit():
+        student = db.query(User).filter(User.id == int(uid)).first()
+    
+    if not student:
+        student = db.query(User).filter(User.uid == uid).first()
+    
+    if not student:
+        raise HTTPException(status_code=404, detail=f"Student with ID/UID '{uid}' not found")
+
+    # Fetch tasks assigned to this student OR global tasks (student_id is null)
+    tasks = db.query(StudentTask).filter(
+        (StudentTask.student_id == student.id) | (StudentTask.student_id == None)
+    ).all()
+    
+    return [t.to_dict() for t in tasks]
+
+@router.post("/tasks")
+async def create_student_task(
+    title: str = Form(...),
+    description: Optional[str] = Form(""),
+    due_date: Optional[str] = Form(""),
+    color_hex: Optional[str] = Form("E8C998"),
+    student_id: Optional[int] = Form(None),
+    file: Optional[UploadFile] = File(None),
+    db: Session = Depends(get_db)
+):
+    file_url = None
+    if file:
+        file_name = f"task_{datetime.now().timestamp()}_{file.filename}"
+        file_path = os.path.join(UPLOAD_DIR, file_name)
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+        file_url = f"/static/student_reports/{file_name}"
+
+    new_task = StudentTask(
+        student_id=student_id,
+        title=title,
+        description=description,
+        due_date=due_date,
+        color_hex=color_hex,
+        file_url=file_url,
+        status="pending"
+    )
+    db.add(new_task)
+    db.commit()
+    db.refresh(new_task)
+    return {"success": True, "task": new_task.to_dict()}
+
+@router.post("/tasks/{task_id}/complete")
+async def complete_student_task(
+    task_id: int,
+    db: Session = Depends(get_db)
+):
+    task = db.query(StudentTask).filter(StudentTask.id == task_id).first()
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    
+    task.status = "completed"
+    db.commit()
+    db.refresh(task)
+    return {"success": True, "task": task.to_dict()}

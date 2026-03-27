@@ -20,13 +20,18 @@ def migrate():
             
         # VitalSigns Table Migrations
         if 'bmi' in vital_columns:
-            # Check current type if possible, or just ensure it's FLOAT (in Postgres DOUBLE PRECISION)
             print("Converting 'bmi' column to FLOAT...")
             try:
-                # This works for PostgreSQL
                 conn.execute(text("ALTER TABLE vital_signs ALTER COLUMN bmi TYPE DOUBLE PRECISION;"))
             except Exception as e:
-                print(f"Skipping BMI type conversion (might be SQLite or already done): {e}")
+                print(f"Skipping BMI type conversion: {e}")
+
+        if 'temperature' in vital_columns:
+            print("Converting 'temperature' column to FLOAT...")
+            try:
+                conn.execute(text("ALTER TABLE vital_signs ALTER COLUMN temperature TYPE DOUBLE PRECISION;"))
+            except Exception as e:
+                print(f"Skipping temperature type conversion: {e}")
         
         conn.commit()
     print("Migration complete!")

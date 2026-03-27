@@ -108,7 +108,7 @@ class VitalSign(Base):
     blood_pressure_sys = Column(Integer)
     blood_pressure_dia = Column(Integer)
     heart_rate = Column(Integer)
-    temperature = Column(Integer) # or Float
+    temperature = Column(Float) # or Float
     respiratory_rate = Column(Integer)
     oxygen_saturation = Column(Integer)
     weight = Column(Integer)
@@ -223,4 +223,28 @@ class StudentReport(Base):
             "fileUrl": self.file_url,
             "status": self.status,
             "submittedAt": self.submitted_at
+        }
+
+class StudentTask(Base):
+    __tablename__ = "student_tasks"
+
+    id = Column(Integer, primary_key=True, index=True)
+    student_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    title = Column(String, nullable=False)
+    description = Column(String)
+    due_date = Column(String)
+    color_hex = Column(String)
+    file_url = Column(String, nullable=True) # Added for task documents
+    status = Column(String, default="pending")
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "studentId": self.student_id,
+            "title": self.title,
+            "description": self.description,
+            "dueDate": self.due_date,
+            "colorHex": self.color_hex,
+            "fileUrl": self.file_url,
+            "status": self.status
         }

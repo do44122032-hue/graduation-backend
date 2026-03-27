@@ -36,13 +36,21 @@ async def get_patient_dashboard(uid: str, db: Session = Depends(get_db)):
     # Health Alert Logic (Simple example)
     health_alerts = []
     latest_vital = vitals[0] if vitals else None
-    if latest_vital and (latest_vital.blood_pressure_sys > 130 or latest_vital.blood_pressure_dia > 85):
-        health_alerts.append({
-            "title": "Blood Pressure Alert",
-            "message": f"Your last reading was {latest_vital.blood_pressure_sys}/{latest_vital.blood_pressure_dia}. Please monitor closely.",
-            "icon": "warning",
-            "type": "danger"
-        })
+    print(f"DEBUG: Vitals count for user {user.id if user else 'None'}: {len(vitals)}")
+    if latest_vital:
+        print(f"DEBUG: Latest vital: BP={latest_vital.blood_pressure_sys}/{latest_vital.blood_pressure_dia}, ID={latest_vital.id}")
+        if latest_vital.blood_pressure_sys > 130 or latest_vital.blood_pressure_dia > 85:
+            print(f"DEBUG: Condition met Sys={latest_vital.blood_pressure_sys} > 130 or Dia={latest_vital.blood_pressure_dia} > 85")
+            health_alerts.append({
+                "title": "Blood Pressure Alert",
+                "message": f"Your last reading was {latest_vital.blood_pressure_sys}/{latest_vital.blood_pressure_dia}. Please monitor closely.",
+                "icon": "warning",
+                "type": "danger"
+            })
+        else:
+            print(f"DEBUG: Condition NOT met for alert")
+    else:
+        print(f"DEBUG: No vitals found at all for this user ID")
 
     return {
         "success": True,
@@ -239,4 +247,20 @@ async def confirm_appointment(appt_id: int, db: Session = Depends(get_db)):
     appointment.status = "confirmed"
     db.commit()
     db.refresh(appointment)
-    return {"success": True, "message": "Appointment confirmed successfully", "appointment": appointment.to_dict()}
+@router.get("/debug/vitals/{uid}")
+async def debug_vitals(uid: str, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.id == int(uid) if uid.isdigit() else False).first()
+    if not user:
+        user = db.query(User).filter(User.uid == uid).first()
+    
+    if not user:
+        return {"error": "User not found"}
+
+    vitals = db.query(VitalSign).filter(VitalSign.patient_id == user.id).order_by(VitalSign.id.desc()).all()
+    return {
+        "userId": user.id,
+        "userUid": user.uid,
+        "userName": user.name,
+        "vitalsCount": len(vitals),
+        "vitals": [v.to_dict() for v in vitals]
+    }
