@@ -32,23 +32,23 @@ class User(Base):
 
     def to_dict(self):
         return {
-            "id": str(self.id),
-            "name": self.name,
-            "email": self.email,
-            "role": self.role,
-            "phoneNumber": self.phone,
-            "profilePicture": self.profile_picture,
-            "age": self.age,
-            "bloodType": self.blood_type,
-            "height": self.height,
-            "weight": self.weight,
-            "dateOfBirth": self.dob,
-            "socialStatus": self.social_status,
+            "id": str(self.id) if self.id else "",
+            "name": self.name or "",
+            "email": self.email or "",
+            "role": self.role or "",
+            "phoneNumber": self.phone or "",
+            "profilePicture": self.profile_picture or "",
+            "age": self.age or "",
+            "bloodType": self.blood_type or "",
+            "height": self.height or "",
+            "weight": self.weight or "",
+            "dateOfBirth": self.dob or "",
+            "socialStatus": self.social_status or "",
             "chronicConditions": self.chronic_conditions or [],
             "medications": self.medications or [],
-            "department": self.department,
-            "bio": self.bio,
-            "isActive": self.is_active,
+            "department": self.department or "",
+            "bio": self.bio or "",
+            "isActive": bool(self.is_active),
         }
 
 class DoctorSchedule(Base):
@@ -87,16 +87,16 @@ class Appointment(Base):
 
     def to_dict(self):
         return {
-            "id": str(self.id),
+            "id": str(self.id) if self.id else "",
             "patientId": self.patient_id,
-            "patientName": self.patient_name,
+            "patientName": self.patient_name or "",
             "doctorId": self.doctor_id,
-            "doctorName": self.doctor_name,
-            "specialty": self.specialty,
-            "date": self.date,
-            "time": self.time,
-            "type": self.type,
-            "status": self.status,
+            "doctorName": self.doctor_name or "",
+            "specialty": self.specialty or "",
+            "date": self.date or "",
+            "time": self.time or "",
+            "type": self.type or "",
+            "status": self.status or "pending",
         }
 
 class VitalSign(Base):
@@ -117,16 +117,17 @@ class VitalSign(Base):
 
     def to_dict(self):
         return {
-            "date": self.date,
-            "bloodPressureSys": self.blood_pressure_sys,
-            "bloodPressureDia": self.blood_pressure_dia,
-            "heartRate": self.heart_rate,
-            "temperature": self.temperature,
-            "respiratoryRate": self.respiratory_rate,
-            "oxygenSaturation": self.oxygen_saturation,
-            "weight": self.weight,
-            "bmi": self.bmi,
-            "bloodGlucose": self.blood_glucose,
+            "id": str(self.id) if hasattr(self, 'id') and self.id else "",
+            "date": self.date or "",
+            "bloodPressureSys": self.blood_pressure_sys or 0,
+            "bloodPressureDia": self.blood_pressure_dia or 0,
+            "heartRate": self.heart_rate or 0,
+            "temperature": self.temperature or 0.0,
+            "respiratoryRate": self.respiratory_rate or 0,
+            "oxygenSaturation": self.oxygen_saturation or 0,
+            "weight": self.weight or 0,
+            "bmi": self.bmi or 0.0,
+            "bloodGlucose": self.blood_glucose or 0,
         }
 
 class MedicationRecord(Base):
