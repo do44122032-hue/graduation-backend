@@ -39,11 +39,16 @@ async def get_patient_dashboard(uid: str, db: Session = Depends(get_db)):
     print(f"DEBUG: Vitals count for user {user.id if user else 'None'}: {len(vitals)}")
     if latest_vital:
         print(f"DEBUG: Latest vital: BP={latest_vital.blood_pressure_sys}/{latest_vital.blood_pressure_dia}, ID={latest_vital.id}")
-        if latest_vital.blood_pressure_sys > 130 or latest_vital.blood_pressure_dia > 85:
-            print(f"DEBUG: Condition met Sys={latest_vital.blood_pressure_sys} > 130 or Dia={latest_vital.blood_pressure_dia} > 85")
+        
+        # Safely extract values with null checks
+        sys = latest_vital.blood_pressure_sys
+        dia = latest_vital.blood_pressure_dia
+        
+        if (sys is not None and sys > 130) or (dia is not None and dia > 85):
+            print(f"DEBUG: Condition met Sys={sys} > 130 or Dia={dia} > 85")
             health_alerts.append({
-                "title": "Blood Pressure Alert",
-                "message": f"Your last reading was {latest_vital.blood_pressure_sys}/{latest_vital.blood_pressure_dia}. Please monitor closely.",
+                "title": "High Blood Pressure Alert",
+                "message": f"Your last reading was {sys}/{dia}. Please monitor closely.",
                 "icon": "warning",
                 "type": "danger"
             })
