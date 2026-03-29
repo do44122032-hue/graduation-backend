@@ -47,7 +47,8 @@ class LogoutRequest(BaseModel):
 @router.post("/signup")
 async def signup(data: SignupRequest, db: Session = Depends(get_db)):
     # Check if user exists
-    db_user = db.query(User).filter(User.email == data.email).first()
+    email_lower = data.email.lower()
+    db_user = db.query(User).filter(User.email == email_lower).first()
     if db_user:
         raise HTTPException(status_code=400, detail="Email already registered")
     
@@ -55,7 +56,7 @@ async def signup(data: SignupRequest, db: Session = Depends(get_db)):
     new_user = User(
         uid=str(uuid.uuid4()),
         name=data.name,
-        email=data.email,
+        email=email_lower,
         password_hash=get_password_hash(data.password),
         phone=data.phone,
         role=data.role,
@@ -75,7 +76,8 @@ async def signup(data: SignupRequest, db: Session = Depends(get_db)):
 
 @router.post("/login")
 async def login(data: LoginRequest, db: Session = Depends(get_db)):
-    db_user = db.query(User).filter(User.email == data.email).first()
+    email_lower = data.email.lower()
+    db_user = db.query(User).filter(User.email == email_lower).first()
     
     if not db_user:
         raise HTTPException(status_code=401, detail="Invalid credentials")
@@ -86,7 +88,8 @@ async def login(data: LoginRequest, db: Session = Depends(get_db)):
     if db_user.role != data.role:
         raise HTTPException(status_code=403, detail="Unauthorized role")
         
-    if db_user.role == "doctor":
+    # Activate user on first successful login
+    if not db_user.is_active:
         db_user.is_active = True
         db.commit()
         db.refresh(db_user)

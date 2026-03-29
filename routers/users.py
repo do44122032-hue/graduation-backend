@@ -54,6 +54,13 @@ async def get_doctors(db: Session = Depends(get_db)):
     return [doctor.to_dict() for doctor in doctors]
 
 
+@router.get("/students")
+async def get_students(db: Session = Depends(get_db)):
+    """Fetch all users with the role 'student'"""
+    students = db.query(User).filter(User.role == "student").all()
+    return [student.to_dict() for student in students]
+
+
 @router.get("/doctors/active")
 async def get_active_doctors(db: Session = Depends(get_db)):
     """Fetch all ACTIVE users with the role 'doctor'"""

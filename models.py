@@ -230,6 +230,7 @@ class StudentTask(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     student_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    doctor_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     title = Column(String, nullable=False)
     description = Column(String)
     due_date = Column(String)
@@ -241,10 +242,49 @@ class StudentTask(Base):
         return {
             "id": self.id,
             "studentId": self.student_id,
+            "doctorId": self.doctor_id,
             "title": self.title,
             "description": self.description,
             "dueDate": self.due_date,
             "colorHex": self.color_hex,
             "fileUrl": self.file_url,
             "status": self.status
+        }
+
+class Course(Base):
+    __tablename__ = "courses"
+
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String, nullable=False)
+    instructor = Column(String)
+    color_hex = Column(String, default="E8C998")
+    icon_name = Column(String, default="school")
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "title": self.title,
+            "instructor": self.instructor,
+            "colorHex": self.color_hex,
+            "iconName": self.icon_name,
+        }
+
+class Enrollment(Base):
+    __tablename__ = "enrollments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    student_id = Column(Integer, ForeignKey("users.id"))
+    course_id = Column(Integer, ForeignKey("courses.id"))
+    progress = Column(Float, default=0.0)
+    grade = Column(String, default="Pending")
+    next_class = Column(String)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "studentId": self.student_id,
+            "courseId": self.course_id,
+            "progress": self.progress,
+            "grade": self.grade,
+            "nextClass": self.next_class,
         }

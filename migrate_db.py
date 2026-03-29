@@ -33,6 +33,21 @@ def migrate():
             except Exception as e:
                 print(f"Skipping temperature type conversion: {e}")
         
+        # StudentTasks Table Migrations
+        st_columns = [c['name'] for c in inspector.get_columns('student_tasks')]
+        if 'doctor_id' not in st_columns:
+            print("Adding column 'doctor_id' to student_tasks...")
+            try:
+                conn.execute(text("ALTER TABLE student_tasks ADD COLUMN doctor_id INTEGER;"))
+            except Exception as e:
+                print(f"Error adding doctor_id: {e}")
+        if 'file_url' not in st_columns:
+            print("Adding column 'file_url' to student_tasks...")
+            try:
+              conn.execute(text("ALTER TABLE student_tasks ADD COLUMN file_url VARCHAR;"))
+            except Exception as e:
+                print(f"Error adding file_url: {e}")
+
         conn.commit()
     print("Migration complete!")
 
