@@ -23,8 +23,11 @@ async def get_patient_dashboard(uid: str, db: Session = Depends(get_db)):
         if not user:
             return {"success": False, "error": "User not found"}
             
-        # Fetching data
-        appointments = db.query(Appointment).filter(Appointment.patient_id == user.id).all()
+        # Fetching data - only show pending and confirmed appointments
+        appointments = db.query(Appointment).filter(
+            Appointment.patient_id == user.id,
+            Appointment.status != "cancelled"
+        ).all()
         vitals = db.query(VitalSign).filter(VitalSign.patient_id == user.id).order_by(VitalSign.id.desc()).all()
         medications = db.query(MedicationRecord).filter(MedicationRecord.patient_id == user.id).all()
         lab_results = db.query(LabResult).filter(LabResult.patient_id == user.id).order_by(LabResult.id.desc()).all()
@@ -173,7 +176,7 @@ async def book_appointment(data: AppointmentCreate, db: Session = Depends(get_db
         date=data.date,
         time=data.time,
         type=data.type,
-        status="pending"
+        status="scheduled"
     )
     db.add(new_appointment)
     if doctor_id_val:

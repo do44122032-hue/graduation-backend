@@ -2,54 +2,54 @@ from sqlalchemy import text, inspect
 from database import engine
 
 def migrate():
+    print("MIGRATION: Starting database migration...")
     inspector = inspect(engine)
-    user_columns = [c['name'] for c in inspector.get_columns('users')]
+    
+    # Get all tables
+    tables = inspector.get_table_names()
+    print(f"MIGRATION: Found tables: {tables}")
+
+    if 'vital_signs' not in tables:
+        print("MIGRATION: vital_signs table missing! models.Base.metadata.create_all should handle this.")
+        return
+
     vital_columns = [c['name'] for c in inspector.get_columns('vital_signs')]
+    print(f"MIGRATION: vital_signs columns: {vital_columns}")
     
     with engine.connect() as conn:
-        # Users Table Migrations
-        if 'department' not in user_columns:
-            print("Adding column 'department'...")
-            conn.execute(text("ALTER TABLE users ADD COLUMN department VARCHAR;"))
-        if 'bio' not in user_columns:
-            print("Adding column 'bio'...")
-            conn.execute(text("ALTER TABLE users ADD COLUMN bio TEXT;"))
-        if 'is_active' not in user_columns:
-            print("Adding column 'is_active'...")
-            conn.execute(text("ALTER TABLE users ADD COLUMN is_active BOOLEAN DEFAULT FALSE;"))
-            
-        # VitalSigns Table Migrations
-        if 'bmi' in vital_columns:
-            print("Converting 'bmi' column to FLOAT...")
-            try:
-                conn.execute(text("ALTER TABLE vital_signs ALTER COLUMN bmi TYPE DOUBLE PRECISION;"))
-            except Exception as e:
-                print(f"Skipping BMI type conversion: {e}")
+        # Helper to safely add column
+        def add_column_if_missing(table, column, definition, default_val=None):
+            if column not in [c['name'] for c in inspect(engine).get_columns(table)]:
+                print(f"MIGRATION: Adding column '{column}' to '{table}'...")
+                try:
+                    conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {definition};"))
+                    if default_val is not None:
+                        conn.execute(text(f"UPDATE {table} SET {column} = {default_val} WHERE {column} IS NULL;"))
+                    conn.commit()
+                    print(f"MIGRATION: Successfully added '{column}'.")
+                except Exception as e:
+                    print(f"MIGRATION: Failed to add '{column}': {e}")
+            else:
+                print(f"MIGRATION: Column '{column}' already exists in '{table}'.")
 
-        if 'temperature' in vital_columns:
-            print("Converting 'temperature' column to FLOAT...")
-            try:
-                conn.execute(text("ALTER TABLE vital_signs ALTER COLUMN temperature TYPE DOUBLE PRECISION;"))
-            except Exception as e:
-                print(f"Skipping temperature type conversion: {e}")
-        
-        # StudentTasks Table Migrations
-        st_columns = [c['name'] for c in inspector.get_columns('student_tasks')]
-        if 'doctor_id' not in st_columns:
-            print("Adding column 'doctor_id' to student_tasks...")
-            try:
-                conn.execute(text("ALTER TABLE student_tasks ADD COLUMN doctor_id INTEGER;"))
-            except Exception as e:
-                print(f"Error adding doctor_id: {e}")
-        if 'file_url' not in st_columns:
-            print("Adding column 'file_url' to student_tasks...")
-            try:
-              conn.execute(text("ALTER TABLE student_tasks ADD COLUMN file_url VARCHAR;"))
-            except Exception as e:
-                print(f"Error adding file_url: {e}")
+        # 1. Vital Signs Table
+        add_column_if_missing('vital_signs', 'blood_glucose', 'INTEGER', 0)
+        add_column_if_missing('vital_signs', 'respiratory_rate', 'INTEGER', 16)
+        add_column_if_missing('vital_signs', 'oxygen_saturation', 'INTEGER', 98)
+        add_column_if_missing('vital_signs', 'bmi', 'DOUBLE PRECISION', 0.0)
+        add_column_if_missing('vital_signs', 'temperature', 'DOUBLE PRECISION', 98.6)
 
-        conn.commit()
-    print("Migration complete!")
+        # 2. Users Table
+        user_columns = [c['name'] for c in inspector.get_columns('users')]
+        add_column_if_missing('users', 'department', 'VARCHAR', "Primary Care")
+        add_column_if_missing('users', 'bio', 'TEXT', "")
+        add_column_if_missing('users', 'is_active', 'BOOLEAN', 'FALSE')
+
+        # 3. Student Tasks
+        add_column_if_missing('student_tasks', 'doctor_id', 'INTEGER', 0)
+        add_column_if_missing('student_tasks', 'file_url', 'VARCHAR', "")
+
+        print("MIGRATION: All migration steps finished.")
 
 if __name__ == "__main__":
     migrate()

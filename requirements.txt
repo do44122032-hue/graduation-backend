@@ -9,3 +9,5 @@ python-dotenv
 pytesseract
 Pillow
 python-multipart
+google-generativeai
+requests

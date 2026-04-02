@@ -7,12 +7,17 @@ from models import DoctorSchedule, User
 # Load environment variables
 load_dotenv()
 
-# Use the same database URL as the main application
-SQL_URL = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/graduation")
+# Use the same database URL as the main application - default to local SQLite for development
+SQL_URL = os.getenv("DATABASE_URL", "sqlite:///./graduation.db")
 if SQL_URL.startswith("postgres://"):
     SQL_URL = SQL_URL.replace("postgres://", "postgresql://", 1)
 
-engine = create_engine(SQL_URL)
+# SQLite needs special arguments
+if SQL_URL.startswith("sqlite"):
+    engine = create_engine(SQL_URL, connect_args={"check_same_thread": False})
+else:
+    engine = create_engine(SQL_URL)
+    
 SessionLocal = sessionmaker(bind=engine)
 db = SessionLocal()
 

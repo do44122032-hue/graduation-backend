@@ -35,7 +35,15 @@ class SignupRequest(BaseModel):
     bio: str | None = None
 
 class ResetPasswordRequest(BaseModel):
-    email: str
+    phone: str
+
+class VerifyCodeRequest(BaseModel):
+    phone: str
+    code: str
+
+class UpdatePasswordRequest(BaseModel):
+    phone: str
+    new_password: str
 
 class LogoutRequest(BaseModel):
     uid: str
@@ -99,11 +107,46 @@ async def login(data: LoginRequest, db: Session = Depends(get_db)):
 
 @router.post("/reset-password")
 async def reset_password(data: ResetPasswordRequest, db: Session = Depends(get_db)):
-    # In a real app, send email; here we just check if exists
-    db_user = db.query(User).filter(User.email == data.email).first()
+    import random
+    # Query by phone
+    db_user = db.query(User).filter(User.phone == data.phone).first()
+    
     if db_user:
-        return {"success": True, "message": "Reset instructions sent (Mock)"}
-    return {"success": True}  # Security: don't leak user presence
+        # Generate 6-digit code
+        code = str(random.randint(100000, 999999))
+        db_user.reset_code = code
+        db.commit()
+        # In a real app, send actual SMS here.
+        print(f"DEBUG: Reset code for phone {data.phone} is {code}")
+        return {"success": True, "message": "Reset code generated"}
+    
+    # Still return success to prevent user enumeration
+    return {"success": True, "message": "Phone number not found but we'll pretend it is for security"}
+
+@router.post("/verify-code")
+async def verify_code(data: VerifyCodeRequest, db: Session = Depends(get_db)):
+    db_user = db.query(User).filter(User.phone == data.phone).first()
+    
+    if not db_user or db_user.reset_code != data.code:
+        raise HTTPException(status_code=400, detail="Invalid verification code")
+        
+    return {"success": True}
+
+@router.post("/update-password")
+async def update_password(data: UpdatePasswordRequest, db: Session = Depends(get_db)):
+    db_user = db.query(User).filter(User.phone == data.phone).first()
+    
+    if not db_user:
+        raise HTTPException(status_code=404, detail="User not found")
+        
+    if not db_user.reset_code:
+         raise HTTPException(status_code=400, detail="Password reset was not initiated")
+
+    db_user.password_hash = get_password_hash(data.new_password)
+    db_user.reset_code = None # Clear code after use
+    db.commit()
+    
+    return {"success": True, "message": "Password updated successfully"}
 
 @router.post("/logout")
 async def logout(data: LogoutRequest, db: Session = Depends(get_db)):

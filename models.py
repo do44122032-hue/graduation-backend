@@ -19,6 +19,7 @@ class User(Base):
     department = Column(String, nullable=True)
     bio = Column(Text, nullable=True)
     is_active = Column(Boolean, default=False)
+    reset_code = Column(String, nullable=True)
 
     # Medical Profile (flattened for simplicity, or could be a JSON column)
     age = Column(String)

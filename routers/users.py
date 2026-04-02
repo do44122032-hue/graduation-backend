@@ -70,13 +70,26 @@ async def get_active_doctors(db: Session = Depends(get_db)):
 
 @router.get("/doctors/{uid}/schedule")
 async def get_doctor_schedule(uid: str, db: Session = Depends(get_db)):
+    print(f"DEBUG: Requesting schedule for Doctor ID/UID: {uid}")
+    
+    # Try ID first (numeric), then legacy UID string
     user = db.query(User).filter(User.id == int(uid) if uid.isdigit() else False).first()
     if not user:
         user = db.query(User).filter(User.uid == uid).first()
-    if not user or user.role != "doctor":
+        
+    if not user:
+        print(f"DEBUG: Doctor '{uid}' NOT FOUND in users table.")
         raise HTTPException(status_code=404, detail="Doctor not found")
         
+    print(f"DEBUG: Found Doctor: {user.name} (ID: {user.id}, Role: {user.role})")
+    
+    if user.role != "doctor":
+        print(f"DEBUG: User found but is NOT a doctor. Role is '{user.role}'.")
+        raise HTTPException(status_code=400, detail="User is not a doctor")
+        
     schedules = db.query(DoctorSchedule).filter(DoctorSchedule.doctor_id == user.id).all()
+    print(f"DEBUG: Found {len(schedules)} schedule slots for Doctor {user.name}.")
+    
     return [s.to_dict() for s in schedules]
 
 
