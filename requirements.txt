@@ -11,3 +11,4 @@ Pillow
 python-multipart
 google-generativeai
 requests
+twilio

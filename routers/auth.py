@@ -116,9 +116,37 @@ async def reset_password(data: ResetPasswordRequest, db: Session = Depends(get_d
         code = str(random.randint(100000, 999999))
         db_user.reset_code = code
         db.commit()
-        # In a real app, send actual SMS here.
-        print(f"DEBUG: Reset code for phone {data.phone} is {code}")
-        return {"success": True, "message": "Reset code generated"}
+        
+        # Twilio SMS Integration
+        import os
+        from twilio.rest import Client
+        
+        twilio_sid = os.getenv("TWILIO_ACCOUNT_SID")
+        twilio_token = os.getenv("TWILIO_AUTH_TOKEN")
+        twilio_phone = os.getenv("TWILIO_PHONE_NUMBER")
+        
+        if twilio_sid and twilio_token and twilio_phone:
+            try:
+                client = Client(twilio_sid, twilio_token)
+                # Format the Iraqi phone number if it starts with 0 (e.g., 0772... to +964772...)
+                formatted_phone = data.phone
+                if formatted_phone.startswith("0") and len(formatted_phone) == 11:
+                    formatted_phone = "+964" + formatted_phone[1:]
+                elif not formatted_phone.startswith("+"):
+                    formatted_phone = "+" + formatted_phone
+                    
+                message = client.messages.create(
+                    body=f"Your MyChart password reset code is: {code}",
+                    from_=twilio_phone,
+                    to=formatted_phone
+                )
+                print(f"SMS Sent successfully! SID: {message.sid}")
+            except Exception as e:
+                print(f"Failed to send SMS: {e}")
+        else:
+            print(f"DEBUG (No Twilio Keys): Reset code for phone {data.phone} is {code}")
+            
+        return {"success": True, "message": "Reset code sent to your phone via SMS!"}
     
     # Still return success to prevent user enumeration
     return {"success": True, "message": "Phone number not found but we'll pretend it is for security"}
