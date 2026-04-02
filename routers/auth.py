@@ -107,18 +107,12 @@ async def login(data: LoginRequest, db: Session = Depends(get_db)):
 
 from fastapi import BackgroundTasks
 
-def send_email_background(smtp_email, smtp_password, target_email, target_name, code):
-    import smtplib
-    from email.mime.text import MIMEText
-    from email.mime.multipart import MIMEMultipart
+def send_email_background(script_url, target_email, target_name, code):
+    import requests
+    import json
     
     try:
-        msg = MIMEMultipart()
-        msg['From'] = smtp_email
-        msg['To'] = target_email
-        msg['Subject'] = "MyChart Password Reset Code"
-        
-        body = f"""
+        html_body = f"""
         <div style="font-family: Arial, sans-serif; padding: 20px; color: #333;">
             <h2>Password Reset Request</h2>
             <p>Hello {target_name},</p>
@@ -128,17 +122,23 @@ def send_email_background(smtp_email, smtp_password, target_email, target_name, 
             <p>If you did not request this, please ignore this email.</p>
         </div>
         """
-        msg.attach(MIMEText(body, 'html'))
         
-        # Use SMTP_SSL on port 465 with a 10s timeout to prevent hanging
-        server = smtplib.SMTP_SSL('smtp.gmail.com', 465, timeout=15)
-        server.login(smtp_email, smtp_password)
-        text = msg.as_string()
-        server.sendmail(smtp_email, target_email, text)
-        server.quit()
-        print(f"DEBUG: Email OTP sent successfully to {target_email}")
+        payload = {
+            "to": target_email,
+            "subject": "MyChart Password Reset Code",
+            "htmlBody": html_body
+        }
+        
+        # Use HTTP POST (Port 443) which Railway never blocks!
+        response = requests.post(script_url, json=payload, timeout=15)
+        
+        if response.status_code == 200:
+            print(f"DEBUG: Webhook Email sent successfully to {target_email}!")
+        else:
+            print(f"DEBUG: Webhook failed. Code: {response.status_code}, Body: {response.text}")
+            
     except Exception as e:
-        print(f"DEBUG: Failed to send Email OTP: {e}")
+        print(f"DEBUG: Failed to trigger Google Script: {e}")
 
 @router.post("/reset-password")
 async def reset_password(data: ResetPasswordRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
@@ -158,15 +158,14 @@ async def reset_password(data: ResetPasswordRequest, background_tasks: Backgroun
         db_user.reset_code_expires_at = datetime.now(timezone.utc) + timedelta(minutes=5)
         db.commit()
         
-        # Email Integration (Gmail SMTP)
-        smtp_email = os.getenv("SMTP_EMAIL")
-        smtp_password = os.getenv("SMTP_PASSWORD")
+        # Google Apps Script Webhook
+        script_url = os.getenv("GOOGLE_SCRIPT_URL")
         
-        if smtp_email and smtp_password:
+        if script_url:
             # Send email in the background to prevent client timeout!
-            background_tasks.add_task(send_email_background, smtp_email, smtp_password, db_user.email, db_user.name, code)
+            background_tasks.add_task(send_email_background, script_url, db_user.email, db_user.name, code)
         else:
-            print(f"DEBUG: No SMTP Keys. Code for {db_user.email}: {code}")
+            print(f"DEBUG: No Script URL. Code for {db_user.email}: {code}")
             
         return {"success": True, "message": "Reset code sent to your email!"}
     
