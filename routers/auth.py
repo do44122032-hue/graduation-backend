@@ -35,14 +35,14 @@ class SignupRequest(BaseModel):
     bio: str | None = None
 
 class ResetPasswordRequest(BaseModel):
-    phone: str
+    email: str
 
 class VerifyCodeRequest(BaseModel):
-    phone: str
+    email: str
     code: str
 
 class UpdatePasswordRequest(BaseModel):
-    phone: str
+    email: str
     new_password: str
 
 class LogoutRequest(BaseModel):
@@ -108,61 +108,94 @@ async def login(data: LoginRequest, db: Session = Depends(get_db)):
 @router.post("/reset-password")
 async def reset_password(data: ResetPasswordRequest, db: Session = Depends(get_db)):
     import random
-    # Query by phone
-    db_user = db.query(User).filter(User.phone == data.phone).first()
+    import smtplib
+    from email.mime.text import MIMEText
+    from email.mime.multipart import MIMEMultipart
+    from datetime import datetime, timedelta, timezone
+    import os
+
+    # Query by email
+    email_lower = data.email.lower()
+    db_user = db.query(User).filter(User.email == email_lower).first()
     
     if db_user:
         # Generate 6-digit code
         code = str(random.randint(100000, 999999))
         db_user.reset_code = code
+        # Set exact expiration time (5 minutes from now)
+        db_user.reset_code_expires_at = datetime.now(timezone.utc) + timedelta(minutes=5)
         db.commit()
         
-        # Twilio SMS Integration
-        import os
-        from twilio.rest import Client
+        # Email Integration (Gmail SMTP)
+        smtp_email = os.getenv("SMTP_EMAIL")
+        smtp_password = os.getenv("SMTP_PASSWORD")
         
-        twilio_sid = os.getenv("TWILIO_ACCOUNT_SID")
-        twilio_token = os.getenv("TWILIO_AUTH_TOKEN")
-        twilio_phone = os.getenv("TWILIO_PHONE_NUMBER")
-        
-        if twilio_sid and twilio_token and twilio_phone:
+        if smtp_email and smtp_password:
             try:
-                client = Client(twilio_sid, twilio_token)
-                # Format the Iraqi phone number if it starts with 0 (e.g., 0772... to +964772...)
-                formatted_phone = data.phone
-                if formatted_phone.startswith("0") and len(formatted_phone) == 11:
-                    formatted_phone = "+964" + formatted_phone[1:]
-                elif not formatted_phone.startswith("+"):
-                    formatted_phone = "+" + formatted_phone
-                    
-                message = client.messages.create(
-                    body=f"Your MyChart password reset code is: {code}",
-                    from_=twilio_phone,
-                    to=formatted_phone
-                )
-                print(f"SMS Sent successfully! SID: {message.sid}")
+                # Setup Email Message
+                msg = MIMEMultipart()
+                msg['From'] = smtp_email
+                msg['To'] = db_user.email
+                msg['Subject'] = "MyChart Password Reset Code"
+                
+                body = f"""
+                <div style="font-family: Arial, sans-serif; padding: 20px; color: #333;">
+                    <h2>Password Reset Request</h2>
+                    <p>Hello {db_user.name},</p>
+                    <p>We received a request to reset your MyChart password. Your One-Time Password (OTP) is:</p>
+                    <h1 style="color: #4CAF50; letter-spacing: 5px; font-size: 32px;">{code}</h1>
+                    <p><i>Note: This code will expire in exactly 5 minutes.</i></p>
+                    <p>If you did not request this, please ignore this email.</p>
+                </div>
+                """
+                msg.attach(MIMEText(body, 'html'))
+                
+                # Connect to Gmail SMTP Sever
+                server = smtplib.SMTP('smtp.gmail.com', 587)
+                server.starttls()
+                server.login(smtp_email, smtp_password)
+                text = msg.as_string()
+                server.sendmail(smtp_email, db_user.email, text)
+                server.quit()
+                print(f"DEBUG: Email OTP sent successfully to {db_user.email}")
+                
             except Exception as e:
-                print(f"Failed to send SMS: {e}")
+                print(f"DEBUG: Failed to send Email OTP: {e}")
+                # We still return success but maybe the server fails logging
         else:
-            print(f"DEBUG (No Twilio Keys): Reset code for phone {data.phone} is {code}")
+            print(f"DEBUG: No SMTP Keys. Code for {db_user.email}: {code}")
             
-        return {"success": True, "message": "Reset code sent to your phone via SMS!"}
+        return {"success": True, "message": "Reset code sent to your email!"}
     
     # Still return success to prevent user enumeration
-    return {"success": True, "message": "Phone number not found but we'll pretend it is for security"}
+    return {"success": True, "message": "Email sent if registered"}
 
 @router.post("/verify-code")
 async def verify_code(data: VerifyCodeRequest, db: Session = Depends(get_db)):
-    db_user = db.query(User).filter(User.phone == data.phone).first()
+    from datetime import datetime, timezone
+    
+    email_lower = data.email.lower()
+    db_user = db.query(User).filter(User.email == email_lower).first()
     
     if not db_user or db_user.reset_code != data.code:
         raise HTTPException(status_code=400, detail="Invalid verification code")
         
+    if db_user.reset_code_expires_at:
+        # Avoid python timezone dumbness by making everything UTC aware
+        now_utc = datetime.now(timezone.utc)
+        expire_time = db_user.reset_code_expires_at
+        if expire_time.tzinfo is None:
+             expire_time = expire_time.replace(tzinfo=timezone.utc)
+             
+        if now_utc > expire_time:
+             raise HTTPException(status_code=400, detail="Verification code has expired. Please request a new one.")
+             
     return {"success": True}
 
 @router.post("/update-password")
 async def update_password(data: UpdatePasswordRequest, db: Session = Depends(get_db)):
-    db_user = db.query(User).filter(User.phone == data.phone).first()
+    email_lower = data.email.lower()
+    db_user = db.query(User).filter(User.email == email_lower).first()
     
     if not db_user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -171,7 +204,8 @@ async def update_password(data: UpdatePasswordRequest, db: Session = Depends(get
          raise HTTPException(status_code=400, detail="Password reset was not initiated")
 
     db_user.password_hash = get_password_hash(data.new_password)
-    db_user.reset_code = None # Clear code after use
+    db_user.reset_code = None # Clear code after use to prevent reuse
+    db_user.reset_code_expires_at = None
     db.commit()
     
     return {"success": True, "message": "Password updated successfully"}

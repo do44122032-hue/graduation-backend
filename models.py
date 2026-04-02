@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Integer, ARRAY, Text, ForeignKey, JSON, Boolean, Float
+from sqlalchemy import Column, String, Integer, ARRAY, Text, ForeignKey, JSON, Boolean, Float, DateTime
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 from datetime import datetime
@@ -20,6 +20,7 @@ class User(Base):
     bio = Column(Text, nullable=True)
     is_active = Column(Boolean, default=False)
     reset_code = Column(String, nullable=True)
+    reset_code_expires_at = Column(DateTime(timezone=True), nullable=True)
 
     # Medical Profile (flattened for simplicity, or could be a JSON column)
     age = Column(String)
