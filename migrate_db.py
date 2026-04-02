@@ -44,6 +44,7 @@ def migrate():
         add_column_if_missing('users', 'department', 'VARCHAR', "Primary Care")
         add_column_if_missing('users', 'bio', 'TEXT', "")
         add_column_if_missing('users', 'is_active', 'BOOLEAN', 'FALSE')
+        add_column_if_missing('users', 'reset_code', 'VARCHAR(6)', 'NULL')
 
         # 3. Student Tasks
         add_column_if_missing('student_tasks', 'doctor_id', 'INTEGER', 0)
