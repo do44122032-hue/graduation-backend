@@ -20,9 +20,9 @@ app = FastAPI(title="Graduation Project API (PostgreSQL)")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=False,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=["Content-Type", "Authorization", "Accept", "X-Requested-With"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
     expose_headers=["*"],
 )
 
