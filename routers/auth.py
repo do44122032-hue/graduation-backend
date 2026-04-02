@@ -105,12 +105,44 @@ async def login(data: LoginRequest, db: Session = Depends(get_db)):
     return {"success": True, "user": db_user.to_dict()}
 
 
-@router.post("/reset-password")
-async def reset_password(data: ResetPasswordRequest, db: Session = Depends(get_db)):
-    import random
+from fastapi import BackgroundTasks
+
+def send_email_background(smtp_email, smtp_password, target_email, target_name, code):
     import smtplib
     from email.mime.text import MIMEText
     from email.mime.multipart import MIMEMultipart
+    
+    try:
+        msg = MIMEMultipart()
+        msg['From'] = smtp_email
+        msg['To'] = target_email
+        msg['Subject'] = "MyChart Password Reset Code"
+        
+        body = f"""
+        <div style="font-family: Arial, sans-serif; padding: 20px; color: #333;">
+            <h2>Password Reset Request</h2>
+            <p>Hello {target_name},</p>
+            <p>We received a request to reset your MyChart password. Your One-Time Password (OTP) is:</p>
+            <h1 style="color: #4CAF50; letter-spacing: 5px; font-size: 32px;">{code}</h1>
+            <p><i>Note: This code will expire in exactly 5 minutes.</i></p>
+            <p>If you did not request this, please ignore this email.</p>
+        </div>
+        """
+        msg.attach(MIMEText(body, 'html'))
+        
+        # Use SMTP_SSL on port 465 with a 10s timeout to prevent hanging
+        server = smtplib.SMTP_SSL('smtp.gmail.com', 465, timeout=15)
+        server.login(smtp_email, smtp_password)
+        text = msg.as_string()
+        server.sendmail(smtp_email, target_email, text)
+        server.quit()
+        print(f"DEBUG: Email OTP sent successfully to {target_email}")
+    except Exception as e:
+        print(f"DEBUG: Failed to send Email OTP: {e}")
+
+@router.post("/reset-password")
+async def reset_password(data: ResetPasswordRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+    import random
     from datetime import datetime, timedelta, timezone
     import os
 
@@ -131,37 +163,8 @@ async def reset_password(data: ResetPasswordRequest, db: Session = Depends(get_d
         smtp_password = os.getenv("SMTP_PASSWORD")
         
         if smtp_email and smtp_password:
-            try:
-                # Setup Email Message
-                msg = MIMEMultipart()
-                msg['From'] = smtp_email
-                msg['To'] = db_user.email
-                msg['Subject'] = "MyChart Password Reset Code"
-                
-                body = f"""
-                <div style="font-family: Arial, sans-serif; padding: 20px; color: #333;">
-                    <h2>Password Reset Request</h2>
-                    <p>Hello {db_user.name},</p>
-                    <p>We received a request to reset your MyChart password. Your One-Time Password (OTP) is:</p>
-                    <h1 style="color: #4CAF50; letter-spacing: 5px; font-size: 32px;">{code}</h1>
-                    <p><i>Note: This code will expire in exactly 5 minutes.</i></p>
-                    <p>If you did not request this, please ignore this email.</p>
-                </div>
-                """
-                msg.attach(MIMEText(body, 'html'))
-                
-                # Connect to Gmail SMTP Sever
-                server = smtplib.SMTP('smtp.gmail.com', 587)
-                server.starttls()
-                server.login(smtp_email, smtp_password)
-                text = msg.as_string()
-                server.sendmail(smtp_email, db_user.email, text)
-                server.quit()
-                print(f"DEBUG: Email OTP sent successfully to {db_user.email}")
-                
-            except Exception as e:
-                print(f"DEBUG: Failed to send Email OTP: {e}")
-                # We still return success but maybe the server fails logging
+            # Send email in the background to prevent client timeout!
+            background_tasks.add_task(send_email_background, smtp_email, smtp_password, db_user.email, db_user.name, code)
         else:
             print(f"DEBUG: No SMTP Keys. Code for {db_user.email}: {code}")
             
