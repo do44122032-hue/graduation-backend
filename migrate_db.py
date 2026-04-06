@@ -51,6 +51,14 @@ def migrate():
         add_column_if_missing('student_tasks', 'doctor_id', 'INTEGER', 0)
         add_column_if_missing('student_tasks', 'file_url', 'VARCHAR', "")
 
+        # 4. Appointments Table
+        add_column_if_missing('appointments', 'patient_name', 'VARCHAR', 'NULL')
+        add_column_if_missing('appointments', 'doctor_id', 'INTEGER', 'NULL')
+        add_column_if_missing('appointments', 'doctor_name', 'VARCHAR', 'NULL')
+        add_column_if_missing('appointments', 'specialty', 'VARCHAR', 'NULL')
+        add_column_if_missing('appointments', 'type', 'VARCHAR', 'NULL')
+        add_column_if_missing('appointments', 'status', 'VARCHAR', "'pending'")
+
         print("MIGRATION: All migration steps finished.")
 
 if __name__ == "__main__":

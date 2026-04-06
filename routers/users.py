@@ -115,6 +115,24 @@ async def add_doctor_schedule(uid: str, data: ScheduleCreate, db: Session = Depe
     return {"success": True, "schedule": new_slot.to_dict()}
 
 
+@router.delete("/doctors/{uid}/schedule/{schedule_id}")
+async def delete_doctor_schedule(uid: str, schedule_id: int, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.id == int(uid) if uid.isdigit() else False).first()
+    if not user:
+        user = db.query(User).filter(User.uid == uid).first()
+    if not user or user.role != "doctor":
+        raise HTTPException(status_code=404, detail="Doctor not found")
+        
+    slot = db.query(DoctorSchedule).filter(DoctorSchedule.id == schedule_id, DoctorSchedule.doctor_id == user.id).first()
+    if not slot:
+        raise HTTPException(status_code=404, detail="Schedule slot not found")
+        
+    db.delete(slot)
+    db.commit()
+    
+    return {"success": True, "message": "Schedule deleted successfully"}
+
+
 @router.put("/patient-profile")
 async def update_patient_profile(data: PatientProfileUpdate, db: Session = Depends(get_db)):
     # Lookup user
